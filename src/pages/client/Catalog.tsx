@@ -433,6 +433,13 @@ export default function Catalog() {
     const uid = user?.id ?? "";
 
     void (async () => {
+      if (!supabase) {
+        if (active) {
+          setError("Katalog belum siap: konfigurasi backend belum lengkap. Hubungi admin.");
+          setLoading(false);
+        }
+        return;
+      }
       const [pRes, vRes, cRes, pcRes, brRes, wRes] = await Promise.all([
         supabase.from("products").select("*").order("created_at", { ascending: false }),
         supabase.from("product_variants").select("*"),
@@ -469,7 +476,7 @@ export default function Catalog() {
   const toggleWishlist = useCallback(
     async (productId: string) => {
       const uid = user?.id;
-      if (!uid) return;
+      if (!supabase || !uid) return;
       const prev = wishlistMap;
       const existingId = prev[productId];
 

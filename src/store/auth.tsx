@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const lastUidRef = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (uid: string) => {
+    if (!supabase) return; // Degraded mode: backend not configured.
     lastUidRef.current = uid;
     setProfileLoading(true);
     setProfileError(null);
@@ -72,6 +73,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     void (async () => {
+      if (!supabase) {
+        // Degraded mode: no backend, stay signed out.
+        setLoading(false);
+        return;
+      }
       const { data } = await supabase.auth.getSession();
       if (!active) return;
       const session = data.session;
@@ -79,6 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       if (session?.user) void loadProfile(session.user.id);
     })();
+
+    if (!supabase) return () => {
+      active = false;
+    };
 
     // Sync overload — avoids the deadlock hazard of async callbacks.
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -100,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    if (!supabase) return { error: "Layanan belum dikonfigurasi. Hubungi admin." };
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -109,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (!supabase) return;
     await supabase.auth.signOut();
   }, []);
 
