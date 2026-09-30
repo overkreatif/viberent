@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarX2,
@@ -11,6 +11,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../store/auth";
 
 const navItems = [
@@ -27,6 +28,34 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
       ? "bg-accent/15 text-primary"
       : "text-muted-foreground hover:bg-muted hover:text-foreground"
   }`;
+
+/** Small count pill for the pending-bookings badge. */
+function PendingBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground"
+      aria-label={`${count} permintaan menunggu`}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+/** Admin nav links; the Dashboard item carries the live pending-bookings count. */
+function NavList({ pendingCount }: { pendingCount: number }) {
+  return (
+    <>
+      {navItems.map((item) => (
+        <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
+          <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1">{item.label}</span>
+          {item.to === "/admin" && pendingCount > 0 && <PendingBadge count={pendingCount} />}
+        </NavLink>
+      ))}
+    </>
+  );
+}
 
 function Brand() {
   return (
@@ -57,9 +86,37 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Live count of pending booking requests (drives the Dashboard nav badge).
+  const loadPendingCount = useCallback(async () => {
+    if (!supabase) return;
+    const { count, error } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    if (!error) setPendingCount(count ?? 0);
+  }, []);
+
+  useEffect(() => {
+    void loadPendingCount();
+    if (!supabase) return;
+    const client = supabase;
+    const channel = client
+      .channel("admin-pending-count")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings" },
+        () => void loadPendingCount(),
+      )
+      .subscribe();
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, [loadPendingCount]);
 
   // Close the drawer whenever the route changes (link tapped inside it).
   useEffect(() => {
@@ -116,12 +173,7 @@ export function AdminLayout() {
           <Brand />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Menu admin">
-          {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
-              <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {item.label}
-            </NavLink>
-          ))}
+          <NavList pendingCount={pendingCount} />
         </nav>
         <div className="space-y-1 border-t border-border p-3">
           <div className="px-3.5 py-2">
@@ -135,16 +187,19 @@ export function AdminLayout() {
       {/* Content column */}
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur md:hidden">
-          <button
-            ref={menuBtnRef}
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Buka menu"
-            aria-expanded={drawerOpen}
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
-          >
-            <Menu className="h-5 w-5" aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              ref={menuBtnRef}
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Buka menu"
+              aria-expanded={drawerOpen}
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+            >
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <PendingBadge count={pendingCount} />
+          </div>
           <Brand />
           <span className="w-9" aria-hidden="true" />
         </header>
@@ -182,12 +237,7 @@ export function AdminLayout() {
               </button>
             </div>
             <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Menu admin">
-              {navItems.map((item) => (
-                <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
-                  <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {item.label}
-                </NavLink>
-              ))}
+              <NavList pendingCount={pendingCount} />
             </nav>
             <div className="space-y-1 border-t border-border p-3">
               <div className="px-3.5 py-2">
