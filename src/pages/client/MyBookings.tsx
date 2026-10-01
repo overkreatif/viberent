@@ -70,6 +70,7 @@ export default function MyBookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "confirmed" | "rejected">("all");
 
   useEffect(() => {
     let active = true;
@@ -111,6 +112,10 @@ export default function MyBookings() {
       active = false;
     };
   }, [uid, reloadKey]);
+
+  const filteredRows = statusFilter === "all"
+    ? rows
+    : rows.filter((booking) => booking.status === statusFilter);
 
   if (loading) {
     return (
@@ -159,8 +164,32 @@ export default function MyBookings() {
           </Link>
         </div>
       ) : (
-        <ul className="space-y-3">
-          {rows.map((b) => {
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-3 text-sm font-medium text-foreground">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+                aria-label="Filter status pesanan"
+                className="h-10 min-w-48 cursor-pointer rounded-lg border border-input bg-card py-2 pr-10 pl-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30"
+              >
+                <option value="all">Semua status</option>
+                <option value="pending">Menunggu konfirmasi</option>
+                <option value="confirmed">Dikonfirmasi</option>
+                <option value="rejected">Ditolak</option>
+              </select>
+            </label>
+            <span className="text-sm text-muted-foreground">{filteredRows.length} pesanan</span>
+          </div>
+
+          {filteredRows.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              Tidak ada pesanan dengan status ini.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {filteredRows.map((b) => {
             const meta = statusMeta[b.status];
             const image = b.products?.images?.[0];
             return (
@@ -220,7 +249,9 @@ export default function MyBookings() {
               </li>
             );
           })}
-        </ul>
+            </ul>
+          )}
+        </>
       )}
     </div>
   );

@@ -13,6 +13,7 @@ import Products from "./pages/admin/Products";
 import Blocking from "./pages/admin/Blocking";
 import Categories from "./pages/admin/Categories";
 import Clients from "./pages/admin/Clients";
+import Settings from "./pages/admin/Settings";
 
 /** Catch-all: sends users to the app that matches their role. */
 function HomeRedirect() {
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="blocking" element={<Blocking />} />
                 <Route path="categories" element={<Categories />} />
                 <Route path="clients" element={<Clients />} />
+                <Route path="settings" element={<Settings />} />
               </Route>
             </Route>
           </Route>

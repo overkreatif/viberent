@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useBookedRangesRefresh } from "../../lib/useBookedRangesRefresh";
 import { useAuth } from "../../store/auth";
 import { useFilterStore } from "../../store/filterStore";
 import {
@@ -242,6 +243,8 @@ export default function ProductDetail() {
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange | null>(null);
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  useBookedRangesRefresh(setBlocks);
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -344,24 +347,31 @@ export default function ProductDetail() {
   }, [range, variant, blocks]);
 
   const canBook = Boolean(range && selectedSize && variant && invalidDates.length === 0);
+  const calendarRange = rangeStart
+    ? { start: rangeStart, end: rangeStart }
+    : range;
 
   const handlePick = useCallback(
     (iso: string) => {
-      const next = !range
-        ? { start: iso, end: iso }
-        : range.start && range.end
-          ? { start: iso, end: iso }
-          : iso < range.start
-            ? { start: iso, end: range.start }
-            : { start: range.start, end: iso };
+      if (!rangeStart) {
+        setRange(null);
+        setRangeStart(iso);
+        setDateRange("", "");
+        return;
+      }
+      const next = iso < rangeStart
+        ? { start: iso, end: rangeStart }
+        : { start: rangeStart, end: iso };
       setRange(next);
+      setRangeStart(null);
       setDateRange(next.start, next.end);
     },
-    [range, setDateRange],
+    [rangeStart, setDateRange],
   );
 
   const clearRange = useCallback(() => {
     setRange(null);
+    setRangeStart(null);
     setDateRange("", "");
   }, [setDateRange]);
 
@@ -581,6 +591,66 @@ export default function ProductDetail() {
             </p>
           )}
 
+          {/* Calendar */}
+          <section className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-heading text-lg font-semibold">Ketersediaan</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Ketuk tanggal untuk memilih rentang sewa
+                  {selectedSize ? ` untuk ukuran ${selectedSize}` : ""}.
+                </p>
+              </div>
+              {(range || rangeStart) && (
+                <button
+                  type="button"
+                  onClick={clearRange}
+                  className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:text-primary"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  Hapus pilihan
+                </button>
+              )}
+            </div>
+
+            {rangeStart ? (
+              <p className="mb-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-foreground">
+                <CalendarDays className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  Tanggal mulai: <strong>{formatShort(rangeStart)}</strong>. Pilih tanggal akhir.
+                </span>
+              </p>
+            ) : range ? (
+              <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-foreground">
+                <CalendarDays className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <span>
+                  Rentang terpilih: {" "}
+                  <strong>
+                    {formatShort(range.start)} – {formatShort(range.end)}
+                  </strong>
+                  {variant ? ` · ${remaining} ${remaining === 1 ? "unit tersedia" : "unit tersedia"}` : ""}
+                </span>
+              </div>
+            ) : (
+              <p className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Pilih dua tanggal untuk membentuk rentang. Hari bertanda coret sudah terbooking.
+              </p>
+            )}
+
+            <div className="max-w-md">
+              <AvailabilityCalendar
+                month={month}
+                onMonthChange={setMonth}
+                variants={variants}
+                blocks={blocks}
+                selectedSize={selectedSize}
+                range={calendarRange}
+                onPick={handlePick}
+              />
+            </div>
+          </section>
+
           {/* Size picker */}
           <section className="mt-5">
             <h2 className="mb-2 text-sm font-semibold text-foreground">Pilih ukuran</h2>
@@ -658,59 +728,6 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Calendar */}
-      <section className="mt-8 rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-heading text-lg font-semibold">Ketersediaan</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Ketuk tanggal untuk memilih rentang sewa
-              {selectedSize ? ` untuk ukuran ${selectedSize}` : ""}.
-            </p>
-          </div>
-          {range && (
-            <button
-              type="button"
-              onClick={clearRange}
-              className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 text-sm text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:text-primary"
-            >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-              Hapus pilihan
-            </button>
-          )}
-        </div>
-
-        {range ? (
-          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-foreground">
-            <CalendarDays className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            <span>
-              Rentang terpilih:{" "}
-              <strong>
-                {formatShort(range.start)} – {formatShort(range.end)}
-              </strong>
-              {variant ? ` · ${remaining} ${remaining === 1 ? "unit tersedia" : "unit tersedia"}` : ""}
-            </span>
-          </div>
-        ) : (
-          <p className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Pilih dua tanggal untuk membentuk rentang. Hari bertanda coret sudah terbooking.
-          </p>
-        )}
-
-        <div className="max-w-md">
-          <AvailabilityCalendar
-            month={month}
-            onMonthChange={setMonth}
-            variants={variants}
-            blocks={blocks}
-            selectedSize={selectedSize}
-            range={range}
-            onPick={handlePick}
-          />
-        </div>
-      </section>
-
       {/* Booking modal */}
       {modalOpen && (
         <Modal title="Kirim permintaan sewa" onClose={closeModal}>
@@ -765,8 +782,7 @@ export default function ProductDetail() {
 
               <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
                 <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-                Admin akan mengonfirmasi permintaan Anda. Harga dan detail sewa dinegosiasikan
-                langsung via WhatsApp.
+                Admin akan mengonfirmasi permintaan Anda.
               </p>
 
               {submitError && (

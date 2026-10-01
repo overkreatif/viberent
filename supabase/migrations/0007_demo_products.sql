@@ -3,7 +3,7 @@
 --   * 200 products with ids c0000000-... (no collision with seed ids a...)
 --   * 12 category-combo patterns: singles, pairs, and a triple
 --   * every product gets a unique title (name + style + color)
---   * size variants (S/M/L/XL or Free) with small stock so availability
+--   * size variants (S/M/L/XL or All Size) with small stock so availability
 --     checks and bookings behave realistically
 --   * 2 picsum placeholder images per product
 -- Re-running is safe: every insert uses ON CONFLICT DO NOTHING.
@@ -97,7 +97,7 @@ variants_inserted as (
   ) as s(size, stock)
   where m.primary_cat <> 'aksesoris'
   union all
-  select m.pid, 'Free', 2 + (m.idx % 5)
+  select m.pid, 'All Size', 2 + (m.idx % 5)
   from meta m
   where m.primary_cat = 'aksesoris'
   on conflict (product_id, size) do nothing

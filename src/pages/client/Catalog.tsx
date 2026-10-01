@@ -9,11 +9,13 @@ import {
 import {
   CalendarDays,
   RotateCcw,
+  Search,
   Shirt,
   SlidersHorizontal,
   X,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useBookedRangesRefresh } from "../../lib/useBookedRangesRefresh";
 import { useAuth } from "../../store/auth";
 import {
   activeDateRange,
@@ -32,6 +34,7 @@ import type {
 } from "../../lib/types";
 import { ProductCard } from "../../components/ProductCard";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
 
 const MONTHS = [
   "Jan",
@@ -237,6 +240,10 @@ export default function Catalog() {
     sizes,
     colors,
     setDateRange,
+    toggleTier,
+    toggleCategory,
+    toggleSize,
+    toggleColor,
     reset,
   } = useFilterStore();
 
@@ -245,11 +252,14 @@ export default function Catalog() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [blocks, setBlocks] = useState<BookedRange[]>([]);
+  useBookedRangesRefresh(setBlocks);
+  const [nameSearch, setNameSearch] = useState("");
   const [wishlistMap, setWishlistMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -377,7 +387,9 @@ export default function Catalog() {
   const range = useMemo(() => activeDateRange({ startDate, endDate }), [startDate, endDate]);
 
   const filtered = useMemo(() => {
+    const query = nameSearch.trim().toLowerCase();
     return products.filter((p) => {
+      if (query && !p.title.toLowerCase().includes(query)) return false;
       if (tiers.length && !tiers.includes(p.tier)) return false;
       if (colors.length && !(p.color_theme && colors.includes(p.color_theme))) return false;
       const pcats = categoryIdsByProduct.get(p.id);
@@ -390,12 +402,41 @@ export default function Catalog() {
       }
       return true;
     });
-  }, [products, tiers, colors, categoryIds, sizes, blocks, range, categoryIdsByProduct, variantsByProduct]);
+  }, [products, nameSearch, tiers, colors, categoryIds, sizes, blocks, range, categoryIdsByProduct, variantsByProduct]);
+
+  function resetCatalogFilters() {
+    reset();
+    setNameSearch("");
+  }
 
   const filterCount = useMemo(
     () => activeFilterCount({ startDate, endDate, tiers, categoryIds, sizes, colors }),
     [startDate, endDate, tiers, categoryIds, sizes, colors],
   );
+  const activeFilterChips: { key: string; label: string; clear: () => void }[] = [
+    ...(range
+      ? [{ key: "date", label: `Tanggal: ${formatShort(range.start)} – ${formatShort(range.end)}`, clear: () => setDateRange("", "") }]
+      : []),
+    ...(tiers.length
+      ? [{ key: "tier", label: `Tier: ${tiers.join(", ")}`, clear: () => tiers.forEach(toggleTier) }]
+      : []),
+    ...(categoryIds.length
+      ? [{
+          key: "category",
+          label: `Kategori: ${categoryIds.map((id) => categories.find((category) => category.id === id)?.name ?? id).join(", ")}`,
+          clear: () => categoryIds.forEach(toggleCategory),
+        }]
+      : []),
+    ...(sizes.length
+      ? [{ key: "size", label: `Ukuran: ${sizes.join(", ")}`, clear: () => sizes.forEach(toggleSize) }]
+      : []),
+    ...(colors.length
+      ? [{ key: "color", label: `Warna: ${colors.join(", ")}`, clear: () => colors.forEach(toggleColor) }]
+      : []),
+    ...(nameSearch.trim()
+      ? [{ key: "name", label: `Nama: ${nameSearch.trim()}`, clear: () => setNameSearch("") }]
+      : []),
+  ];
 
   /* --------------------------- drawer a11y ------------------------- */
 
@@ -447,7 +488,7 @@ export default function Catalog() {
           <div className="h-8 w-44 animate-pulse rounded bg-muted" />
           <div className="mt-2 h-4 w-64 animate-pulse rounded bg-muted" />
         </div>
-        <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
@@ -504,16 +545,51 @@ export default function Catalog() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[15rem_1fr] lg:gap-8">
-        {/* Desktop sidebar */}
-        <aside className="hidden lg:block">
-          <div className="sticky top-20 rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h2 className="mb-4 font-heading text-lg font-semibold">Filter</h2>
-            <FilterPanel options={options} />
-          </div>
-        </aside>
+      <div className="relative mb-5">
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={nameSearch}
+          onChange={(event) => setNameSearch(event.target.value)}
+          placeholder="Cari nama produk…"
+          aria-label="Cari nama produk"
+          className="h-11 w-full rounded-lg border border-input bg-card pl-10 pr-3.5 text-sm text-foreground transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+        />
+      </div>
 
-        <div>
+      <div>
+          <div className="mb-4 hidden flex-wrap items-center gap-2 lg:flex">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => setDesktopFiltersOpen(true)}
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              Filter
+              {filterCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                  {filterCount}
+                </span>
+              )}
+            </Button>
+            {activeFilterChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={chip.clear}
+                aria-label={`Hapus filter ${chip.label}`}
+                title={`Hapus filter ${chip.label}`}
+                className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 py-1 pl-2.5 pr-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-accent/20"
+              >
+                <span className="truncate">{chip.label}</span>
+                <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+
           {/* Mobile toolbar */}
           <div className="mb-4 flex items-center gap-2 lg:hidden">
             <Button
@@ -550,18 +626,17 @@ export default function Catalog() {
               <Shirt className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
               <h2 className="font-heading text-xl font-semibold">Belum ada kostum yang cocok</h2>
               <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                Tidak ada item yang cocok dengan filter saat ini. Coba longgarkan rentang tanggal
-                atau pilihan Anda.
+                Tidak ada item yang cocok. Coba ubah kata kunci atau pilihan filter Anda.
               </p>
-              {filterCount > 0 && (
-                <Button variant="outline" onClick={reset}>
+              {(filterCount > 0 || nameSearch) && (
+                <Button variant="outline" onClick={resetCatalogFilters}>
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  Atur ulang filter
+                  Hapus pencarian dan filter
                 </Button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3.5 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
               {filtered.map((p) => (
                 <ProductCard
                   key={p.id}
@@ -575,8 +650,17 @@ export default function Catalog() {
               ))}
             </div>
           )}
-        </div>
       </div>
+
+      {desktopFiltersOpen && (
+        <Modal
+          title="Filter Katalog"
+          onClose={() => setDesktopFiltersOpen(false)}
+          className="!w-full max-w-xl"
+        >
+          <FilterPanel options={options} />
+        </Modal>
+      )}
 
       {/* Mobile filter drawer */}
       {drawerOpen && (

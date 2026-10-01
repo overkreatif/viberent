@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
     // 5) Create the matching profiles row (role = 'client').
     const { error: insertError } = await adminClient
       .from("profiles")
-      .insert({ id: created.user.id, full_name: fullName, role: "client", phone });
+      .insert({ id: created.user.id, full_name: fullName, email, role: "client", phone });
 
     if (insertError) {
       // Roll back the auth user so no orphaned login remains.

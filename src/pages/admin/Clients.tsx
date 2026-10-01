@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff, UserPlus, Users, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import {
   FunctionsFetchError,
   FunctionsHttpError,
@@ -10,6 +20,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
+import { Modal } from "../../components/ui/Modal";
 import { Placeholder } from "../../components/ui/Placeholder";
 
 /* --------------------------------- types ---------------------------------- */
@@ -17,9 +28,12 @@ import { Placeholder } from "../../components/ui/Placeholder";
 interface ClientRow {
   id: string;
   full_name: string;
+  email: string;
   phone: string | null;
   created_at: string;
 }
+
+const PAGE_SIZE = 10;
 
 /* --------------------------------- helpers -------------------------------- */
 
@@ -59,21 +73,39 @@ function isValidEmail(email: string): boolean {
 
 export default function Clients() {
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editPasswordConfirmation, setEditPasswordConfirmation] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingClient, setSavingClient] = useState(false);
+  const [deletingClient, setDeletingClient] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
     email?: string;
     password?: string;
+    passwordConfirmation?: string;
   }>({});
+  const pageCount = Math.max(1, Math.ceil(clients.length / PAGE_SIZE));
+  const visibleClients = clients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, pageCount));
+  }, [pageCount]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,7 +114,7 @@ export default function Clients() {
       if (!supabase) throw new Error("no-supabase");
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, phone, created_at")
+        .select("id, full_name, email, phone, created_at")
         .eq("role", "client")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -105,10 +137,18 @@ export default function Clients() {
   }, [notice]);
 
   function validate(): boolean {
-    const errors: { name?: string; email?: string; password?: string } = {};
+    const errors: {
+      name?: string;
+      email?: string;
+      password?: string;
+      passwordConfirmation?: string;
+    } = {};
     if (!fullName.trim()) errors.name = "Nama lengkap wajib diisi.";
     if (!isValidEmail(email)) errors.email = "Format email tidak valid.";
     if (password.length < 6) errors.password = "Password minimal 6 karakter.";
+    if (passwordConfirmation !== password) {
+      errors.passwordConfirmation = "Konfirmasi password tidak sama.";
+    }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -157,14 +197,101 @@ export default function Clients() {
       setFullName("");
       setEmail("");
       setPassword("");
+      setPasswordConfirmation("");
       setPhone("");
       setShowPassword(false);
       setFieldErrors({});
+      setPage(1);
       void load();
     } catch (err) {
       setFormError(humanizeError(err));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function startEditing(client: ClientRow) {
+    setEditingClient(client);
+    setEditName(client.full_name);
+    setEditEmail(client.email);
+    setEditPhone(client.phone ?? "");
+    setEditPassword("");
+    setEditPasswordConfirmation("");
+    setEditError(null);
+  }
+
+  async function saveClient(e: FormEvent) {
+    e.preventDefault();
+    if (!editingClient || !supabase) return;
+    if (!editName.trim() || !isValidEmail(editEmail)) {
+      setEditError("Nama wajib diisi dan format email harus valid.");
+      return;
+    }
+    if (editPassword && editPassword.length < 6) {
+      setEditError("Password baru minimal 6 karakter.");
+      return;
+    }
+    if (editPassword !== editPasswordConfirmation) {
+      setEditError("Password baru dan konfirmasi password tidak sama.");
+      return;
+    }
+    setSavingClient(true);
+    setEditError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-client-account", {
+        body: {
+          action: "update",
+          id: editingClient.id,
+          full_name: editName.trim(),
+          email: editEmail.trim().toLowerCase(),
+          phone: editPhone.trim() || null,
+          ...(editPassword ? { password: editPassword } : {}),
+        },
+      });
+      if (error) {
+        const ctx = error instanceof FunctionsHttpError
+          ? (await error.context.json().catch(() => null)) as { error?: string } | null
+          : null;
+        throw new Error(ctx?.error ?? "Gagal memperbarui data klien.");
+      }
+      const result = data as { password_updated?: boolean } | null;
+      if (editPassword && result?.password_updated !== true) {
+        throw new Error(
+          "Password belum dikonfirmasi oleh server. Deploy ulang Edge Function manage-client-account, lalu coba lagi.",
+        );
+      }
+      setNotice("Data klien berhasil diperbarui.");
+      setEditingClient(null);
+      setEditPassword("");
+      setEditPasswordConfirmation("");
+      await load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Gagal memperbarui data klien.");
+    } finally {
+      setSavingClient(false);
+    }
+  }
+
+  async function deleteClient(client: ClientRow) {
+    if (!supabase || !window.confirm(`Hapus akun ${client.full_name}? Tindakan ini tidak dapat dibatalkan.`)) return;
+    setDeletingClient(client.id);
+    setLoadError(null);
+    try {
+      const { error } = await supabase.functions.invoke("manage-client-account", {
+        body: { action: "delete", id: client.id },
+      });
+      if (error) {
+        const ctx = error instanceof FunctionsHttpError
+          ? (await error.context.json().catch(() => null)) as { error?: string } | null
+          : null;
+        throw new Error(ctx?.error ?? "Gagal menghapus akun klien.");
+      }
+      setNotice(`Akun ${client.full_name} berhasil dihapus.`);
+      await load();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Gagal menghapus akun klien.");
+    } finally {
+      setDeletingClient(null);
     }
   }
 
@@ -276,6 +403,16 @@ export default function Clients() {
               )}
             </div>
             <Field
+              label="Konfirmasi Password Baru"
+              type="password"
+              placeholder="Ulangi password"
+              value={passwordConfirmation}
+              onChange={(e) => setPasswordConfirmation(e.target.value)}
+              error={fieldErrors.passwordConfirmation}
+              autoComplete="new-password"
+              required
+            />
+            <Field
               label="No. WhatsApp"
               type="tel"
               placeholder="cth. 081234567890"
@@ -340,9 +477,10 @@ export default function Clients() {
               description="Buat akun klien pertama dengan formulir di samping. Klien bisa langsung masuk dan mulai memesan."
             />
           ) : (
-            <Card className="overflow-hidden">
-              <ul className="divide-y divide-border">
-                {clients.map((c) => (
+            <>
+              <Card className="overflow-hidden">
+                <ul className="divide-y divide-border">
+                  {visibleClients.map((c) => (
                   <li key={c.id} className="flex items-center gap-4 px-4 py-3.5">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-primary">
                       {initials(c.full_name) || "?"}
@@ -352,6 +490,9 @@ export default function Clients() {
                         {c.full_name}
                       </p>
                       <p className="truncate text-sm text-muted-foreground">
+                        {c.email}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
                         {c.phone ? c.phone : "Belum ada nomor WA"}
                       </p>
                     </div>
@@ -361,13 +502,104 @@ export default function Clients() {
                         {formatDate(c.created_at)}
                       </p>
                     </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditing(c)}
+                        aria-label={`Edit ${c.full_name}`}
+                        title="Edit klien"
+                        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteClient(c)}
+                        disabled={deletingClient === c.id}
+                        aria-label={`Hapus ${c.full_name}`}
+                        title="Hapus klien"
+                        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-destructive transition-colors hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
                   </li>
-                ))}
-              </ul>
-            </Card>
+                  ))}
+                </ul>
+              </Card>
+              {clients.length > PAGE_SIZE && (
+                <nav
+                  aria-label="Pagination daftar klien"
+                  className="flex items-center justify-between gap-3"
+                >
+                  <p className="text-sm text-muted-foreground">
+                    Halaman {page} dari {pageCount}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((currentPage) => currentPage - 1)}
+                      disabled={page === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                      Sebelumnya
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((currentPage) => currentPage + 1)}
+                      disabled={page === pageCount}
+                    >
+                      Berikutnya
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </nav>
+              )}
+            </>
           )}
         </div>
       </div>
+
+      {editingClient && (
+        <Modal title="Edit Klien" onClose={() => setEditingClient(null)}>
+          <form onSubmit={(e) => void saveClient(e)} className="space-y-4" noValidate>
+            {editError && (
+              <div role="alert" className="rounded-lg border border-destructive/30 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-destructive">
+                {editError}
+              </div>
+            )}
+            <Field label="Nama lengkap" value={editName} onChange={(e) => setEditName(e.target.value)} required />
+            <Field label="Email" type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required />
+            <Field label="No. WhatsApp" type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+            <Field
+              label="Password baru"
+              type="password"
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
+              placeholder="Kosongkan jika tidak diubah"
+              autoComplete="new-password"
+              minLength={6}
+            />
+            <Field
+              label="Konfirmasi Password Baru"
+              type="password"
+              value={editPasswordConfirmation}
+              onChange={(e) => setEditPasswordConfirmation(e.target.value)}
+              placeholder="Ulangi password baru"
+              autoComplete="new-password"
+              required={Boolean(editPassword)}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditingClient(null)}>Batal</Button>
+              <Button type="submit" loading={savingClient}>Simpan</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

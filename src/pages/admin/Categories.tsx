@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Pencil, Plus, Search, Tags, Trash2, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Search,
+  Tags,
+  Trash2,
+  X,
+} from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import type { Category } from "../../lib/types";
 import { Badge } from "../../components/ui/Badge";
@@ -8,6 +17,8 @@ import { Card } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { Modal } from "../../components/ui/Modal";
 import { Placeholder } from "../../components/ui/Placeholder";
+
+const PAGE_SIZE = 10;
 
 /* --------------------------------- helpers -------------------------------- */
 
@@ -132,6 +143,7 @@ export default function Categories() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<Category | null>(null);
@@ -180,6 +192,16 @@ export default function Categories() {
       (c) => c.name.toLowerCase().includes(q) || c.slug.includes(q),
     );
   }, [categories, search]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const visibleCategories = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, pageCount));
+  }, [pageCount]);
 
   async function handleDelete() {
     if (!confirmTarget) return;
@@ -312,9 +334,10 @@ export default function Categories() {
           description="Tidak ada kategori yang cocok dengan pencarian. Coba kata kunci lain."
         />
       ) : (
-        <Card className="overflow-hidden">
-          <ul className="divide-y divide-border">
-            {filtered.map((c) => (
+        <>
+          <Card className="overflow-hidden">
+            <ul className="divide-y divide-border">
+              {visibleCategories.map((c) => (
               <li
                 key={c.id}
                 className="flex items-center gap-4 px-4 py-3.5 transition-colors duration-150 hover:bg-muted/40"
@@ -356,9 +379,42 @@ export default function Categories() {
                   </button>
                 </div>
               </li>
-            ))}
-          </ul>
-        </Card>
+              ))}
+            </ul>
+          </Card>
+          {filtered.length > PAGE_SIZE && (
+            <nav
+              aria-label="Pagination daftar kategori"
+              className="flex items-center justify-between gap-3"
+            >
+              <p className="text-sm text-muted-foreground">
+                Halaman {page} dari {pageCount}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((currentPage) => currentPage - 1)}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  Sebelumnya
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((currentPage) => currentPage + 1)}
+                  disabled={page === pageCount}
+                >
+                  Berikutnya
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+            </nav>
+          )}
+        </>
       )}
 
       {/* Form modal */}

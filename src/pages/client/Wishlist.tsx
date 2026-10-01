@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useBookedRangesRefresh } from "../../lib/useBookedRangesRefresh";
 import { useAuth } from "../../store/auth";
 import type { BookedRange, Product, ProductVariant, Wishlist } from "../../lib/types";
 import { ProductCard } from "../../components/ProductCard";
@@ -15,6 +16,7 @@ export default function Wishlist() {
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [blocks, setBlocks] = useState<BookedRange[]>([]);
+  useBookedRangesRefresh(setBlocks);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);

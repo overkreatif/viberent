@@ -65,6 +65,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [historyStartDate, setHistoryStartDate] = useState("");
+  const [historyEndDate, setHistoryEndDate] = useState("");
 
   const load = useCallback(async () => {
     if (!supabase) {
@@ -147,7 +149,22 @@ export default function Dashboard() {
   }
 
   const pending = sorted.filter((b) => b.status === "pending");
-  const history = sorted.filter((b) => b.status !== "pending");
+  const history = sorted
+    .filter((b) => b.status !== "pending")
+    .sort((a, b) =>
+      b.start_date.localeCompare(a.start_date) ||
+      b.end_date.localeCompare(a.end_date) ||
+      b.created_at.localeCompare(a.created_at),
+    );
+  const filteredHistory = useMemo(
+    () =>
+      history.filter(
+        (booking) =>
+          (!historyStartDate || booking.end_date >= historyStartDate) &&
+          (!historyEndDate || booking.start_date <= historyEndDate),
+      ),
+    [history, historyEndDate, historyStartDate],
+  );
 
   if (loading) {
     return (
@@ -291,31 +308,73 @@ export default function Dashboard() {
       {history.length > 0 && (
         <section>
           <h2 className="mb-3 font-heading text-lg font-semibold">Riwayat</h2>
-          <ul className="space-y-2">
-            {history.map((b) => {
-              const client = b.profiles;
-              const variant: "success" | "danger" | "neutral" =
-                b.status === "confirmed" ? "success" : b.status === "rejected" ? "danger" : "neutral";
-              return (
-                <li
-                  key={b.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 shadow-soft"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {b.products?.title ?? "Produk"}{" "}
-                      <span className="text-muted-foreground">· {b.size}</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatShort(b.start_date)} – {formatShort(b.end_date)} ·{" "}
-                      {client?.full_name ?? "Klien"}
-                    </p>
-                  </div>
-                  <Badge variant={variant}>{statusLabel[b.status]}</Badge>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="mb-3 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Dari tanggal
+              <input
+                type="date"
+                value={historyStartDate}
+                max={historyEndDate || undefined}
+                onChange={(event) => setHistoryStartDate(event.target.value)}
+                className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Sampai tanggal
+              <input
+                type="date"
+                value={historyEndDate}
+                min={historyStartDate || undefined}
+                onChange={(event) => setHistoryEndDate(event.target.value)}
+                className="h-10 rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              />
+            </label>
+            {(historyStartDate || historyEndDate) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setHistoryStartDate("");
+                  setHistoryEndDate("");
+                }}
+              >
+                Reset filter
+              </Button>
+            )}
+          </div>
+          {filteredHistory.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              Tidak ada riwayat pada rentang tanggal ini.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {filteredHistory.map((b) => {
+                const client = b.profiles;
+                const variant: "success" | "danger" | "neutral" =
+                  b.status === "confirmed" ? "success" : b.status === "rejected" ? "danger" : "neutral";
+                return (
+                  <li
+                    key={b.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border bg-card px-4 py-3 shadow-soft"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {b.products?.title ?? "Produk"}{" "}
+                        <span className="text-muted-foreground">· {b.size}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatShort(b.start_date)} – {formatShort(b.end_date)} ·{" "}
+                        {client?.full_name ?? "Klien"}
+                        {client?.phone ? ` / ${client.phone}` : ""}
+                      </p>
+                    </div>
+                    <Badge variant={variant}>{statusLabel[b.status]}</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       )}
     </div>

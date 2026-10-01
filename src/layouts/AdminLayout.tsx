@@ -6,6 +6,7 @@ import {
   LogOut,
   Menu,
   Shirt,
+  Settings,
   Sparkles,
   Tags,
   Users,
@@ -20,6 +21,7 @@ const navItems = [
   { to: "/admin/blocking", label: "Atur Jadwal", icon: CalendarX2, end: false },
   { to: "/admin/categories", label: "Kategori", icon: Tags, end: false },
   { to: "/admin/clients", label: "Klien", icon: Users, end: false },
+  { to: "/admin/settings", label: "Settings", icon: Settings, end: false },
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>

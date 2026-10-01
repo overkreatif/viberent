@@ -6,13 +6,15 @@ export interface DateRange {
   end: string;
 }
 
-function overlaps(range: DateRange, block: BookedRange): boolean {
-  return block.start_date <= range.end && block.end_date >= range.start;
+function nextDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
 /**
- * Number of confirmed + admin-blocked bookings overlapping the range for a
- * product/size. Pending and rejected bookings never count.
+ * Peak number of pending, confirmed, or admin-blocked bookings occupying a
+ * product/size on any single day in the selected range. Rejected bookings do
+ * not consume inventory.
  */
 export function countBooked(
   blocks: BookedRange[],
@@ -21,9 +23,30 @@ export function countBooked(
   range: DateRange | null,
 ): number {
   if (!range) return 0;
-  return blocks.filter(
-    (b) => b.product_id === productId && b.size === size && overlaps(range, b),
-  ).length;
+  const events = new Map<string, number>();
+  for (const booking of blocks) {
+    if (
+      booking.product_id !== productId ||
+      booking.size !== size ||
+      booking.end_date < range.start ||
+      booking.start_date > range.end
+    ) {
+      continue;
+    }
+    const start = booking.start_date < range.start ? range.start : booking.start_date;
+    const end = booking.end_date > range.end ? range.end : booking.end_date;
+    events.set(start, (events.get(start) ?? 0) + 1);
+    const dayAfterEnd = nextDate(end);
+    events.set(dayAfterEnd, (events.get(dayAfterEnd) ?? 0) - 1);
+  }
+
+  let active = 0;
+  let peak = 0;
+  for (const date of [...events.keys()].sort()) {
+    active += events.get(date) ?? 0;
+    peak = Math.max(peak, active);
+  }
+  return peak;
 }
 
 /** Remaining rentable units for a variant over the range (floor at 0). */

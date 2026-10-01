@@ -69,7 +69,7 @@ export function Modal({ title, onClose, children, className = "" }: ModalProps) 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-card shadow-lift sm:rounded-2xl ${className}`}
+        className={`relative flex max-h-[92vh] w-1/2 flex-col rounded-t-2xl bg-card shadow-lift sm:rounded-2xl ${className}`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <h2 id={titleId} className="font-heading text-lg font-semibold text-foreground">

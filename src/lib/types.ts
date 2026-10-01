@@ -70,5 +70,5 @@ export interface BookedRange {
   size: string;
   start_date: string;
   end_date: string;
-  status: "confirmed" | "blocked_by_admin";
+  status: "pending" | "confirmed" | "blocked_by_admin";
 }

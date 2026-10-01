@@ -118,11 +118,13 @@ function formatDate(iso: string): string {
 function ProductFormModal({
   editing,
   categories,
+  onCategoryAdded,
   onClose,
   onSaved,
 }: {
   editing: ProductRow | null;
   categories: Category[];
+  onCategoryAdded: (category: Category) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -246,26 +248,45 @@ function ProductFormModal({
     }
   }
 
-  async function handleAddCategory(e: FormEvent) {
-    e.preventDefault();
+  async function handleAddCategory() {
     const name = newCategoryName.trim();
     if (!name) {
       setCatError("Nama kategori wajib diisi.");
+      return;
+    }
+    const slug = slugify(name);
+    if (!slug) {
+      setCatError("Nama kategori harus berisi huruf atau angka.");
       return;
     }
     setCatBusy(true);
     setCatError(null);
     try {
       if (!supabase) throw new Error("no-supabase");
-      const { data, error } = await supabase
-        .from("categories")
-        .insert({ name, slug: slugify(name) })
-        .select("id, name, slug")
-        .single();
-      if (error) throw error;
-      const created = data as Category;
-      categories.push(created);
-      set("categoryIds", [...form.categoryIds, created.id]);
+      let category = categories.find((item) => item.slug === slug);
+      if (!category) {
+        const { data: existing, error: findError } = await supabase
+          .from("categories")
+          .select("id, name, slug")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (findError) throw findError;
+        if (existing) {
+          category = existing as Category;
+        } else {
+          const { data, error } = await supabase
+            .from("categories")
+            .insert({ name, slug })
+            .select("id, name, slug")
+            .single();
+          if (error) throw error;
+          category = data as Category;
+        }
+      }
+      onCategoryAdded(category);
+      set("categoryIds", form.categoryIds.includes(category.id)
+        ? form.categoryIds
+        : [...form.categoryIds, category.id]);
       setNewCategoryName("");
     } catch (err) {
       setCatError(humanizeError(err));
@@ -405,20 +426,30 @@ function ProductFormModal({
               </p>
             )}
           </div>
-          <form
-            onSubmit={handleAddCategory}
+          <div
             className="flex flex-wrap items-center gap-2"
-            aria-label="Tambah kategori baru"
           >
             <input
               type="text"
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAddCategory();
+                }
+              }}
               placeholder="Nama kategori baru…"
               aria-label="Nama kategori baru"
               className={`${inputCls} !h-9 w-48 !text-xs`}
             />
-            <Button type="submit" variant="outline" size="sm" loading={catBusy}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={catBusy}
+              onClick={() => void handleAddCategory()}
+            >
               <Plus className="h-4 w-4" aria-hidden="true" />
               Tambah
             </Button>
@@ -427,7 +458,7 @@ function ProductFormModal({
                 {catError}
               </p>
             )}
-          </form>
+          </div>
         </div>
 
         {/* Varian */}
@@ -954,6 +985,13 @@ export default function Products() {
         <ProductFormModal
           editing={editing}
           categories={categories}
+          onCategoryAdded={(category) => {
+            setCategories((current) =>
+              current.some((item) => item.id === category.id)
+                ? current
+                : [...current, category].sort((a, b) => a.name.localeCompare(b.name, "id")),
+            );
+          }}
           onClose={() => setFormOpen(false)}
           onSaved={() => {
             setFormOpen(false);

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Ban, CalendarDays, Info, Plus, Trash2 } from "lucide-react";
+import { Ban, CalendarDays, Info, Plus, Search, Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { countBooked, type DateRange } from "../../lib/availability";
-import type { BookedRange, Product, ProductVariant } from "../../lib/types";
+import type { BookedRange, Product, ProductVariant, Profile } from "../../lib/types";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -19,11 +19,17 @@ interface BlockRow {
   start_date: string;
   end_date: string;
   created_at: string;
+  status: "pending" | "confirmed" | "blocked_by_admin";
   products: Pick<Product, "title"> | null;
+  profiles: Pick<Profile, "full_name" | "phone"> | null;
 }
 
-type RawBlockRow = Omit<BlockRow, "products"> & {
+type RawBlockRow = Omit<BlockRow, "products" | "profiles"> & {
   products: Pick<Product, "title"> | Pick<Product, "title">[] | null;
+  profiles:
+    | Pick<Profile, "full_name" | "phone">
+    | Pick<Profile, "full_name" | "phone">[]
+    | null;
 };
 
 const MONTHS = [
@@ -54,9 +60,12 @@ const dateInputClass =
 export default function Blocking() {
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
-  const [ranges, setRanges] = useState<BookedRange[]>([]); // confirmed + blocked (for overlap warnings)
-  const [blocks, setBlocks] = useState<BlockRow[]>([]); // raw admin-blocked rows (for cleanup)
+  const [ranges, setRanges] = useState<BookedRange[]>([]); // inventory reservations for overlap warnings
+  const [blocks, setBlocks] = useState<BlockRow[]>([]); // client reservations + manual blocks
+  const [reloadKey, setReloadKey] = useState(0);
   const [productId, setProductId] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [showProductResults, setShowProductResults] = useState(false);
   const [size, setSize] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -85,9 +94,8 @@ export default function Blocking() {
         supabase.rpc("get_booked_ranges"),
         supabase
           .from("bookings")
-          .select("id, product_id, size, start_date, end_date, created_at, products(title)")
-          .eq("status", "blocked_by_admin")
-          .is("user_id", null)
+          .select("id, product_id, size, start_date, end_date, created_at, status, products(title), profiles(full_name, phone)")
+          .in("status", ["pending", "confirmed", "blocked_by_admin"])
           .order("created_at", { ascending: false }),
       ]);
       if (!active) return;
@@ -105,6 +113,7 @@ export default function Blocking() {
         ((bRes.data ?? []) as unknown as RawBlockRow[]).map((r) => ({
           ...r,
           products: firstEmbed(r.products),
+          profiles: firstEmbed(r.profiles),
         })),
       );
       setLoading(false);
@@ -113,12 +122,35 @@ export default function Blocking() {
     return () => {
       active = false;
     };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const client = supabase;
+    const channel = client
+      .channel("admin-schedule-bookings")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings" },
+        () => setReloadKey((current) => current + 1),
+      )
+      .subscribe();
+    return () => {
+      client.removeChannel(channel);
+    };
   }, []);
 
   const productVariants = useMemo(
     () => variants.filter((v) => v.product_id === productId),
     [variants, productId],
   );
+  const matchingProducts = useMemo(() => {
+    const query = productSearch.trim().toLowerCase();
+    if (!query) return products;
+    return products.filter((product) =>
+      `${product.title} ${product.id}`.toLowerCase().includes(query),
+    );
+  }, [products, productSearch]);
 
   // Keep the selected size valid when the product changes.
   useEffect(() => {
@@ -215,18 +247,67 @@ export default function Blocking() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-foreground">Produk</span>
-            <select
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">Pilih produk</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                role="combobox"
+                aria-label="Cari produk berdasarkan nama atau UUID"
+                aria-autocomplete="list"
+                aria-expanded={showProductResults}
+                aria-controls="blocking-product-results"
+                value={productSearch}
+                onFocus={() => setShowProductResults(true)}
+                onBlur={() => setShowProductResults(false)}
+                onChange={(event) => {
+                  setProductSearch(event.target.value);
+                  setProductId("");
+                  setSize("");
+                  setShowProductResults(true);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setShowProductResults(false);
+                }}
+                placeholder="Cari nama atau UUID produk"
+                className={`${selectClass} cursor-text pl-10`}
+              />
+              {showProductResults && (
+                <div
+                  id="blocking-product-results"
+                  role="listbox"
+                  className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lift"
+                >
+                  {matchingProducts.length > 0 ? (
+                    matchingProducts.map((product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        role="option"
+                        aria-selected={product.id === productId}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setProductId(product.id);
+                          setProductSearch(product.title);
+                          setSize("");
+                          setShowProductResults(false);
+                        }}
+                        className="flex w-full cursor-pointer flex-col px-3 py-2 text-left transition-colors hover:bg-muted"
+                      >
+                        <span className="text-sm font-medium text-foreground">{product.title}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{product.id}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                      Produk tidak ditemukan.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </label>
 
           <label className="block">
@@ -300,7 +381,7 @@ export default function Blocking() {
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-4 font-heading text-lg font-semibold">Blokir aktif</h2>
+        <h2 className="mb-4 font-heading text-lg font-semibold">Jadwal tidak tersedia</h2>
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 2 }).map((_, i) => (
@@ -314,9 +395,9 @@ export default function Blocking() {
         ) : visibleBlocks.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-8 text-center">
             <CalendarDays className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
-            <p className="text-sm font-medium text-foreground">Tidak ada blokir untuk produk ini</p>
+            <p className="text-sm font-medium text-foreground">Tidak ada booking atau blokir untuk produk ini</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Gunakan formulir di atas untuk memblokir rentang tanggal tertentu.
+              Booking terkonfirmasi dan blokir manual akan muncul di sini.
             </p>
           </div>
         ) : (
@@ -336,21 +417,42 @@ export default function Blocking() {
                       <span className="text-muted-foreground">{b.size}</span>
                     </p>
                     <p className="text-xs text-muted-foreground">
+                      {b.status === "blocked_by_admin"
+                        ? "Blocked by Admin"
+                        : `${b.profiles?.full_name ?? "Klien"}${b.profiles?.phone ? ` / ${b.profiles.phone}` : ""}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
                       {formatShort(b.start_date)} – {formatShort(b.end_date)}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="danger">Diblokir</Badge>
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete(b.id)}
-                    disabled={deletingId === b.id}
-                    aria-label={`Hapus blokir ${b.start_date} – ${b.end_date}`}
-                    className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-red-50 hover:text-destructive disabled:opacity-50"
+                  <Badge
+                    variant={
+                      b.status === "pending"
+                        ? "warning"
+                        : b.status === "confirmed"
+                          ? "success"
+                          : "danger"
+                    }
                   >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
+                    {b.status === "pending"
+                      ? "Menunggu"
+                      : b.status === "confirmed"
+                        ? "Dikonfirmasi"
+                        : "Diblokir"}
+                  </Badge>
+                  {b.status === "blocked_by_admin" && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(b.id)}
+                      disabled={deletingId === b.id}
+                      aria-label={`Hapus blokir ${b.start_date} – ${b.end_date}`}
+                      className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-red-50 hover:text-destructive disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
