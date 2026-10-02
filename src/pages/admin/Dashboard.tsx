@@ -77,7 +77,7 @@ export default function Dashboard() {
     const { data, error: err } = await supabase
       .from("bookings")
       .select(
-        "id, product_id, size, user_id, start_date, end_date, status, created_at, products(title, images), profiles(full_name, phone)",
+        "id, product_id, size, quantity, user_id, start_date, end_date, status, created_at, products(title, images), profiles(full_name, phone)",
       )
       .order("created_at", { ascending: false });
     if (err) {
@@ -142,7 +142,13 @@ export default function Dashboard() {
     const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
     setBusyId(null);
     if (error) {
-      setError("Gagal memperbarui status. Coba lagi.");
+      setError(
+        /inventory|stok|quantity/i.test(error.message)
+          ? "Stok tidak cukup pada rentang tanggal ini. Booking tidak dapat dikonfirmasi."
+          : /terminal|confirmed bookings cannot return to pending/i.test(error.message)
+            ? "Status booking sudah final dan tidak dapat diubah kembali."
+            : "Gagal memperbarui status. Coba lagi.",
+      );
       return;
     }
     void load();
@@ -255,7 +261,9 @@ export default function Dashboard() {
                       </div>
                       <p className="mt-1 text-sm text-foreground">
                         {formatShort(b.start_date)} – {formatShort(b.end_date)}{" "}
-                        <span className="text-muted-foreground">· Ukuran {b.size}</span>
+                        <span className="text-muted-foreground">
+                          · Ukuran {b.size} ({b.quantity} stok)
+                        </span>
                       </p>
                       <p className="mt-1.5 text-sm text-muted-foreground">
                         {client?.full_name ?? "Klien"} · {client?.phone ?? "—"} · Diajukan{" "}
@@ -267,7 +275,7 @@ export default function Dashboard() {
                         <a
                           href={waLink(
                             client.phone,
-                            `Halo ${client.full_name}! Permintaan sewa *${b.products?.title ?? "kostum"}* (${b.size}, ${formatShort(b.start_date)} – ${formatShort(b.end_date)}) sedang diproses.`,
+                            `Halo ${client.full_name}! Permintaan sewa *${b.quantity}* pakaian *${b.products?.title ?? "kostum"}* (${b.size}, ${formatShort(b.start_date)} – ${formatShort(b.end_date)}) sedang diproses.`,
                           )}
                           target="_blank"
                           rel="noreferrer"
@@ -361,7 +369,7 @@ export default function Dashboard() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
                         {b.products?.title ?? "Produk"}{" "}
-                        <span className="text-muted-foreground">· {b.size}</span>
+                        <span className="text-muted-foreground">· {b.size} ({b.quantity} stok)</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatShort(b.start_date)} – {formatShort(b.end_date)} ·{" "}

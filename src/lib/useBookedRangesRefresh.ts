@@ -26,6 +26,10 @@ export function useBookedRangesRefresh(
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") void refresh();
     };
+    const channel = client
+      .channel("availability-inventory")
+      .on("broadcast", { event: "inventory_changed" }, () => void refresh())
+      .subscribe();
     const interval = window.setInterval(() => void refresh(), 30_000);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -33,6 +37,7 @@ export function useBookedRangesRefresh(
       active = false;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      void client.removeChannel(channel);
     };
   }, [setRanges]);
 }

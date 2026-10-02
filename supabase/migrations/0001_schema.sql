@@ -1,5 +1,5 @@
 -- ============================================================================
--- 0001_schema.sql — Core schema for Dress & Costume Rental (Viberent)
+-- 0001_schema.sql — Core schema for Dress & Costume Rental (RentFolio)
 -- Tables, constraints, and indexes per prd/overview.md "Schema (reference
 -- sketch)". No RLS here — that ships in 0002_rls_rpc.sql.
 -- ============================================================================

@@ -69,7 +69,7 @@ export const useFilterStore = create<FilterState>()(
           colors: [],
         }),
     }),
-    { name: "viberent-filters" },
+    { name: "rentfolio-filters" },
   ),
 );
 

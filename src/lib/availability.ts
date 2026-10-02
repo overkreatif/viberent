@@ -35,9 +35,9 @@ export function countBooked(
     }
     const start = booking.start_date < range.start ? range.start : booking.start_date;
     const end = booking.end_date > range.end ? range.end : booking.end_date;
-    events.set(start, (events.get(start) ?? 0) + 1);
+    events.set(start, (events.get(start) ?? 0) + booking.quantity);
     const dayAfterEnd = nextDate(end);
-    events.set(dayAfterEnd, (events.get(dayAfterEnd) ?? 0) - 1);
+    events.set(dayAfterEnd, (events.get(dayAfterEnd) ?? 0) - booking.quantity);
   }
 
   let active = 0;

@@ -7,13 +7,13 @@ import {
   Menu,
   Shirt,
   Settings,
-  Sparkles,
   Tags,
   Users,
   X,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../store/auth";
+import { Logo } from "../components/ui/Logo";
 
 const navItems = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -61,12 +61,7 @@ function NavList({ pendingCount }: { pendingCount: number }) {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-primary">
-        <Sparkles className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <span className="font-heading text-lg font-semibold tracking-tight">Viberent</span>
-    </div>
+    <Logo />
   );
 }
 

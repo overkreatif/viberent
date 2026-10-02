@@ -74,6 +74,7 @@ export default function Wishlist() {
       setItems((prev) => prev.filter((w) => w.product_id !== productId));
       const { error } = await supabase.from("wishlists").delete().eq("id", item.id);
       if (error) setItems((prev) => [...prev, item]);
+      else window.dispatchEvent(new Event("rentfolio:wishlist-changed"));
     },
     [items, uid],
   );

@@ -16,6 +16,7 @@ interface BookingRow {
   id: string;
   product_id: string;
   size: string;
+  quantity: number;
   start_date: string;
   end_date: string;
   status: BookingStatus;
@@ -88,7 +89,7 @@ export default function MyBookings() {
       const { data, error: err } = await supabase
         .from("bookings")
         .select(
-          "id, product_id, size, start_date, end_date, status, created_at, products(title, images)",
+          "id, product_id, size, quantity, start_date, end_date, status, created_at, products(title, images)",
         )
         .eq("user_id", uid)
         .order("created_at", { ascending: false });
@@ -112,6 +113,22 @@ export default function MyBookings() {
       active = false;
     };
   }, [uid, reloadKey]);
+
+  useEffect(() => {
+    if (!supabase || !uid) return;
+    const client = supabase;
+    const channel = client
+      .channel(`client-bookings-${uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings", filter: `user_id=eq.${uid}` },
+        () => setReloadKey((key) => key + 1),
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [uid]);
 
   const filteredRows = statusFilter === "all"
     ? rows
@@ -232,6 +249,7 @@ export default function MyBookings() {
                     <span className="rounded-md border border-border px-1.5 py-0.5 font-medium text-foreground">
                       Ukuran {b.size}
                     </span>
+                    <span>{b.quantity} pakaian</span>
                     <span>Diajukan {formatCreated(b.created_at)}</span>
                   </div>
                   {b.status === "pending" && (

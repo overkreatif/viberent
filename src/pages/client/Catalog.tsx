@@ -328,6 +328,7 @@ export default function Catalog() {
         });
         const { error } = await supabase.from("wishlists").delete().eq("id", existingId);
         if (error) setWishlistMap(prev);
+        else window.dispatchEvent(new Event("rentfolio:wishlist-changed"));
       } else {
         // Optimistic add
         setWishlistMap((m) => ({ ...m, [productId]: "pending" }));
@@ -341,6 +342,7 @@ export default function Catalog() {
           return;
         }
         setWishlistMap((m) => ({ ...m, [productId]: data.id }));
+        window.dispatchEvent(new Event("rentfolio:wishlist-changed"));
       }
     },
     [user?.id, wishlistMap],

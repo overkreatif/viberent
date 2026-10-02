@@ -4,7 +4,7 @@
 --   * 5 sample products with size variants + placeholder images
 --   * settings row (admin WhatsApp number placeholder)
 --   * two login-capable users: one admin, one client
---       admin : admin@viberent.id / Viberent@2026   (role = admin)
+--       admin : admin@rentfolio.id / RentFolio@2026   (role = admin)
 --       client: client@demo.id      / Client@2026    (role = client)
 --     Passwords are bcrypt-hashed here via pgcrypto (extensions schema).
 --     Identities rows are required for GoTrue sign-in to work.
@@ -111,8 +111,8 @@ insert into auth.users (
 ) values
   ('00000000-0000-0000-0000-000000000000',
    'b0000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated',
-   'admin@viberent.id',
-   extensions.crypt('Viberent@2026', extensions.gen_salt('bf')),
+  'admin@rentfolio.id',
+  extensions.crypt('RentFolio@2026', extensions.gen_salt('bf')),
    now(), '{"provider":"email","providers":["email"]}', '{}',
    now(), now(), '', '', '', '', false, false),
   ('00000000-0000-0000-0000-000000000000',
@@ -131,7 +131,7 @@ insert into auth.identities (
 ) values
   (gen_random_uuid(), 'b0000000-0000-0000-0000-000000000001',
    'b0000000-0000-0000-0000-000000000001',
-   jsonb_build_object('sub', 'b0000000-0000-0000-0000-000000000001', 'email', 'admin@viberent.id'),
+  jsonb_build_object('sub', 'b0000000-0000-0000-0000-000000000001', 'email', 'admin@rentfolio.id'),
    'email', now(), now(), now()),
   (gen_random_uuid(), 'b0000000-0000-0000-0000-000000000002',
    'b0000000-0000-0000-0000-000000000002',
@@ -140,6 +140,6 @@ insert into auth.identities (
 on conflict (provider_id, provider) do nothing;
 
 insert into public.profiles (id, full_name, role, phone) values
-  ('b0000000-0000-0000-0000-000000000001', 'Admin Viberent', 'admin', '6281234567890'),
+  ('b0000000-0000-0000-0000-000000000001', 'Admin RentFolio', 'admin', '6281234567890'),
   ('b0000000-0000-0000-0000-000000000002', 'Siti Rahma', 'client', '6281234567788')
 on conflict (id) do nothing;

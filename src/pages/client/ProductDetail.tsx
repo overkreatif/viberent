@@ -242,6 +242,7 @@ export default function ProductDetail() {
 
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
   const [range, setRange] = useState<DateRange | null>(null);
   const [rangeStart, setRangeStart] = useState<string | null>(null);
   useBookedRangesRefresh(setBlocks);
@@ -331,6 +332,12 @@ export default function ProductDetail() {
     () => (selectedSize ? variants.find((v) => v.size === selectedSize) ?? null : null),
     [variants, selectedSize],
   );
+  const availableUnits = variant ? availableCount(variant, blocks, range) : 0;
+
+  useEffect(() => {
+    if (availableUnits > 0 && quantity > availableUnits) setQuantity(availableUnits);
+    if (availableUnits === 0 && quantity !== 1) setQuantity(1);
+  }, [availableUnits, quantity]);
 
   const categoryNames = useMemo(() => {
     const byId = new Map(categories.map((c) => [c.id, c.name]));
@@ -341,12 +348,14 @@ export default function ProductDetail() {
     if (!range || !variant) return [] as string[];
     const bad: string[] = [];
     for (let d = range.start; d <= range.end; d = addDaysIso(d, 1)) {
-      if (!isDateAvailable(variant, blocks, d)) bad.push(d);
+      if (availableCount(variant, blocks, { start: d, end: d }) < quantity) bad.push(d);
     }
     return bad;
-  }, [range, variant, blocks]);
+  }, [range, variant, blocks, quantity]);
 
-  const canBook = Boolean(range && selectedSize && variant && invalidDates.length === 0);
+  const canBook = Boolean(
+    range && selectedSize && variant && quantity > 0 && quantity <= availableUnits && invalidDates.length === 0,
+  );
   const calendarRange = rangeStart
     ? { start: rangeStart, end: rangeStart }
     : range;
@@ -403,21 +412,24 @@ export default function ProductDetail() {
     }
   }, [uid, productId, wishlisted, wishlistId]);
 
-  const waMessage = product
-    ? `Halo Viberent! Saya tertarik dengan kostum *${product.title}* (${selectedSize ?? "ukuran apa pun"}). Apakah tersedia?`
-    : "Halo Viberent!";
+  const waMessage = range && selectedSize && product
+    ? `Halo RentFolio! Saya ingin menyewa *${quantity}* pakaian *${product.title}* ukuran *${selectedSize}* pada ${formatShort(range.start)} – ${formatShort(range.end)}. Mohon konfirmasi ketersediaannya. Terima kasih!`
+    : product
+      ? `Halo RentFolio! Saya tertarik dengan kostum *${product.title}* (${selectedSize ?? "ukuran apa pun"}). Apakah tersedia?`
+      : "Halo RentFolio!";
   const waBookingMessage =
     range && selectedSize && product
-      ? `Halo Viberent! Saya ingin menyewa *${product.title}* ukuran *${selectedSize}* pada ${formatShort(range.start)} – ${formatShort(range.end)}. Mohon konfirmasi ketersediaannya. Terima kasih!`
-      : "Halo Viberent!";
+      ? `Halo RentFolio! Saya ingin menyewa *${quantity}* pakaian *${product.title}* ukuran *${selectedSize}* pada ${formatShort(range.start)} – ${formatShort(range.end)}. Mohon konfirmasi ketersediaannya. Terima kasih!`
+      : "Halo RentFolio!";
 
   async function handleSubmit() {
-    if (!supabase || !range || !selectedSize || !user) return;
+    if (!supabase || !range || !selectedSize || !user || !canBook) return;
     setSubmitting(true);
     setSubmitError(null);
     const { error } = await supabase.from("bookings").insert({
       product_id: productId,
       size: selectedSize,
+      quantity,
       user_id: user.id,
       start_date: range.start,
       end_date: range.end,
@@ -474,7 +486,7 @@ export default function ProductDetail() {
     );
   }
 
-  const remaining = variant ? availableCount(variant, blocks, range) : 0;
+  const remaining = availableUnits;
 
   return (
     <div>
@@ -662,7 +674,7 @@ export default function ProductDetail() {
               <div className="flex flex-wrap gap-2">
                 {variants.map((v) => {
                   const left = availableCount(v, blocks, range);
-                  const disabled = range ? left <= 0 : false;
+                  const disabled = left <= 0;
                   return (
                     <button
                       key={v.size}
@@ -702,7 +714,7 @@ export default function ProductDetail() {
               className="min-w-44 flex-1 sm:flex-none"
             >
               <CalendarDays className="h-4 w-4" aria-hidden="true" />
-              {range ? "Pesan kostum" : "Pilih tanggal untuk memesan"}
+              {range ? "Booking Kostum" : "Pilih tanggal untuk memesan"}
             </Button>
             {adminPhone && (
               <a
@@ -738,7 +750,7 @@ export default function ProductDetail() {
               </span>
               <h3 className="font-heading text-xl font-semibold">Permintaan terkirim!</h3>
               <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-                Pesanan Anda untuk <strong>{product.title}</strong> ({selectedSize},{" "}
+                Pesanan Anda untuk <strong>{quantity} pakaian {product.title}</strong> ({selectedSize},{" "}
                 {range ? `${formatShort(range.start)} – ${formatShort(range.end)}` : ""}) sudah
                 tercatat dan menunggu konfirmasi admin. Selesaikan detail sewa via WhatsApp agar
                 prosesnya lebih cepat.
@@ -774,11 +786,29 @@ export default function ProductDetail() {
                     {product.title}
                   </p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    Ukuran {selectedSize} ·{" "}
+                    Ukuran {selectedSize} · {quantity} pakaian ·{" "}
                     {range ? `${formatShort(range.start)} – ${formatShort(range.end)}` : "—"}
                   </p>
                 </div>
               </div>
+
+              <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-foreground">
+                Jumlah pakaian
+                <select
+                  value={quantity}
+                  onChange={(event) => setQuantity(Number(event.target.value))}
+                  className="h-11 w-full cursor-pointer rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  {Array.from({ length: availableUnits }, (_, index) => index + 1).map((amount) => (
+                    <option key={amount} value={amount}>
+                      {amount} pakaian
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Sisa stok untuk rentang ini: {availableUnits} unit.
+                </span>
+              </label>
 
               <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
                 <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
@@ -795,6 +825,7 @@ export default function ProductDetail() {
                 <Button
                   size="lg"
                   loading={submitting}
+                  disabled={!canBook}
                   onClick={() => void handleSubmit()}
                   className="w-full"
                 >

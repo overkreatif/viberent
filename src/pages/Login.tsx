@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Sparkles } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { useAuth } from "../store/auth";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Field } from "../components/ui/Field";
 import { FullPageLoader } from "../routes/guards";
+import { Logo } from "../components/ui/Logo";
 
 export default function Login() {
   const { user, profile, profileError, loading, signIn, signOut } = useAuth();
@@ -67,12 +68,9 @@ export default function Login() {
 
       <Card className="relative w-full max-w-md p-8 sm:p-10">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-primary">
-            <Sparkles className="h-6 w-6" aria-hidden="true" />
-          </span>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Viberent</h1>
+          <Logo className="h-12" />
           <p className="mt-2 text-sm text-muted-foreground">
-            Sewa gaun &amp; pakaian untuk acara spesial Anda.
+            Smart Wardrobe Rental Catalog
           </p>
         </div>
 

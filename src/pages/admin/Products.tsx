@@ -72,6 +72,8 @@ const inputCls =
 
 const textareaCls =
   "min-h-28 w-full rounded-lg border border-input bg-card px-3.5 py-2.5 text-sm text-foreground transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60";
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 /* --------------------------------- helpers -------------------------------- */
 
@@ -299,13 +301,20 @@ function ProductFormModal({
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
+    if (files.some((file) => !ALLOWED_IMAGE_TYPES.has(file.type))) {
+      setFormError("Format gambar tidak didukung. Gunakan JPG, PNG, atau WebP.");
+      return;
+    }
+    if (files.some((file) => file.size > MAX_IMAGE_SIZE)) {
+      setFormError("Ukuran setiap gambar maksimal 5 MB.");
+      return;
+    }
     setUploading(true);
     setFormError(null);
     try {
       if (!supabase) throw new Error("no-supabase");
       const urls: string[] = [];
       for (const file of files) {
-        if (!file.type.startsWith("image/")) continue;
         const path = `products/${uid()}-${file.name.replace(/[^\w.-]/g, "_")}`;
         const { error } = await supabase.storage
           .from("product-images")
@@ -568,7 +577,7 @@ function ProductFormModal({
               {uploading ? "Mengunggah…" : "Unggah Foto"}
               <input
                 type="file"
-                accept="image/*"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                 multiple
                 className="sr-only"
                 onChange={handleUploadFiles}

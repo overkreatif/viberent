@@ -51,6 +51,7 @@ export interface Booking {
   id: string;
   product_id: string;
   size: string;
+  quantity: number;
   user_id: string | null;
   start_date: string;
   end_date: string;
@@ -68,6 +69,7 @@ export interface Settings {
 export interface BookedRange {
   product_id: string;
   size: string;
+  quantity: number;
   start_date: string;
   end_date: string;
   status: "pending" | "confirmed" | "blocked_by_admin";

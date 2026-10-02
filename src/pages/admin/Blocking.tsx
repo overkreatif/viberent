@@ -16,6 +16,7 @@ interface BlockRow {
   id: string;
   product_id: string;
   size: string;
+  quantity: number;
   start_date: string;
   end_date: string;
   created_at: string;
@@ -94,7 +95,7 @@ export default function Blocking() {
         supabase.rpc("get_booked_ranges"),
         supabase
           .from("bookings")
-          .select("id, product_id, size, start_date, end_date, created_at, status, products(title), profiles(full_name, phone)")
+          .select("id, product_id, size, quantity, start_date, end_date, created_at, status, products(title), profiles(full_name, phone)")
           .in("status", ["pending", "confirmed", "blocked_by_admin"])
           .order("created_at", { ascending: false }),
       ]);
@@ -414,7 +415,7 @@ export default function Blocking() {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">
                       {b.products?.title ?? "Produk"} ·{" "}
-                      <span className="text-muted-foreground">{b.size}</span>
+                      <span className="text-muted-foreground">{b.size} ({b.quantity} stok)</span>
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {b.status === "blocked_by_admin"
