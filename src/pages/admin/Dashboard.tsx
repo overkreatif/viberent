@@ -127,13 +127,23 @@ export default function Dashboard() {
     [rows],
   );
 
+  const filteredBookings = useMemo(
+    () =>
+      sorted.filter(
+        (booking) =>
+          (!historyStartDate || booking.end_date >= historyStartDate) &&
+          (!historyEndDate || booking.start_date <= historyEndDate),
+      ),
+    [sorted, historyEndDate, historyStartDate],
+  );
+
   const counts = useMemo(
     () => ({
-      pending: sorted.filter((b) => b.status === "pending").length,
-      confirmed: sorted.filter((b) => b.status === "confirmed").length,
-      total: sorted.length,
+      pending: filteredBookings.filter((b) => b.status === "pending").length,
+      confirmed: filteredBookings.filter((b) => b.status === "confirmed").length,
+      total: filteredBookings.length,
     }),
-    [sorted],
+    [filteredBookings],
   );
 
   async function setStatus(id: string, status: "confirmed" | "rejected") {
@@ -164,12 +174,15 @@ export default function Dashboard() {
     );
   const filteredHistory = useMemo(
     () =>
-      history.filter(
-        (booking) =>
-          (!historyStartDate || booking.end_date >= historyStartDate) &&
-          (!historyEndDate || booking.start_date <= historyEndDate),
-      ),
-    [history, historyEndDate, historyStartDate],
+        filteredBookings
+          .filter((booking) => booking.status !== "pending")
+          .sort(
+            (a, b) =>
+              b.start_date.localeCompare(a.start_date) ||
+              b.end_date.localeCompare(a.end_date) ||
+              b.created_at.localeCompare(a.created_at),
+          ),
+      [filteredBookings],
   );
 
   if (loading) {
