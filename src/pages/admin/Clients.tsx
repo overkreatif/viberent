@@ -342,7 +342,7 @@ export default function Clients() {
             )}
             <Field
               label="Nama lengkap"
-              placeholder="cth. Siti Rahma"
+              placeholder="cth. John Doe"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               error={fieldErrors.name}
@@ -351,7 +351,7 @@ export default function Clients() {
             <Field
               label="Email"
               type="email"
-              placeholder="cth. siti@example.com"
+              placeholder="cth. john@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               error={fieldErrors.email}
